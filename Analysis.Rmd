@@ -1,0 +1,52 @@
+---
+title: "Modelling _E. coli_ die-off in mini trials"
+author: "Nicholas Waters"
+date: "2/5/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rstan)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+```
+
+## Introduction
+
+## The Data
+
+### Main dataset
+Data is stored in this repo's `data` dir.  The `raw` directory contains the raw data files recieved, which were copied to the `clean` dir, and modified as needed. 
+
+The bulk of the data was from file "Box Behnken analysis.xlsx", recieved from RN via Skype on 2019-02-27, and this file was an updated version of the earlier "All Raw Data Mini Trial.xlsx" file.  The data were in the "Block on rep" and "methane" tabs.
+
+The main changes to "Box Behnken analysis" that were made:
+- label OLR was changed to OL to reflect the time-independant nature of the value
+- label HRT was changed to time, for the inverse reason
+- the methane aggretation was fixed to prevent values from being summed twice
+- addition of an "export" tab, for exporting to csv.
+
+All these changes can be found in "./data/clean/Box Behnken analysis_nick_27.02.19.xlsx", and exported as "./data/clean/trial_data.csv".
+
+### Day 0 Values
+After discussion about the experimental setup and the move to a time-based model rather than the Box Behnken analysis, we requested the Day 0 values for the 3 feedstocks, innoculum, and their mixtures. The file "Mini Trial FS FIB TS&VS.xlsx" was recieved 2019-04-30 from SN.  
+
+Data was aggregated and exported as "./data/clean/day0.csv" from the "day0" worksheet I added.
+
+
+### Questions about the data
+
+- When is the data refereing to the Feedstock, Innoculum, Food Waste, Recipe, etc?
+- do we have TS for the different conditions at day 0?
+- Have I aggregated the data properly?
+- Should indicator counts include innoculum?
+
+## Data explorations
+
+First thing we did was read in the main data file and merge it with the day 0 data.
+```{r reading_data}
+
+
+```
