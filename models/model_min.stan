@@ -29,8 +29,12 @@ parameters {
 transformed parameters {
   vector[nrows] bugs_hat; // the *real* pathogen load, without measurement error
   for (i in 1:nrows){
-    bugs_hat[i] = (recipe_effect[Recipe[i]] * Time[i]) + load_effect[Recipe[i]] + temp_effect[Temp[i]] + ol_effect[Recipe[i]] * OL[i] + VS[i];
+    bugs_hat[i] = (VS[i] * Time[i]) + (recipe_effect[Recipe[i]] * OL[i]) + (VS[i] * recipe_effect[Recipe[i]]);
   }
+  // bugs_hat[i] = (recipe_effect[Recipe[i]] * Time[i]) + load_effect[Recipe[i]] + temp_effect[Temp[i]] + (recipe_effect[Recipe[i]] * OL[i]) + (VS[i] * recipe_effect[Recipe[i]]);
+ // for (i in 1:nrows){
+ //    bugs_hat[i] = (Time[i]) + load_effect[Recipe[i]] + temp_effect[Temp[i]] + ol_effect[Recipe[i]] * OL[i] + VS[i];
+ //  }
 }
 model {
   // for (i in 1:nrows){
@@ -38,7 +42,7 @@ model {
   // }
   //eta ~ cauchy(1, 1);
   sigma ~ cauchy(0, 1);
-  recipe_effect ~ cauchy(0, 1);
+  recipe_effect ~ cauchy(1, 1);
   load_effect ~ cauchy(0, 1);
   temp_effect ~ cauchy(0, 1);
   //sigma_co ~ cauchy(sigma, eta);

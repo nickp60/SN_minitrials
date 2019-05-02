@@ -3,12 +3,16 @@ title: "Modelling _E. coli_ die-off in mini trials"
 author: "Nicholas Waters"
 date: "2/5/2019"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(rstan)
+library(GGally)
+
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 ```
@@ -43,10 +47,103 @@ Data was aggregated and exported as "./data/clean/day0.csv" from the "day0" work
 - Have I aggregated the data properly?
 - Should indicator counts include innoculum?
 
+
+## Todo
+- scale day 0 pH, sCOD, and indicators as mixed
+
+
 ## Data explorations
 
-First thing we did was read in the main data file and merge it with the day 0 data.
+First thing we did was read in the main data file and merge it with the day 0 data. Then, we convert log-scale the the indicator bacteria counts, adding a dummy value of 1 to prevent errors of logging 0.
 ```{r reading_data}
+sn_raw <- rbind(
+  read.csv("./data/clean/trial_data.csv"),
+  read.csv("./data/clean/day0.csv", skip=2, skipNul = T)
+)
+sn <- sn_raw %>%
+  rowwise() %>% 
+  transform(
+    Recipe=as.factor(Recipe),
+    Ecoli =  log10(Ecoli + 1),
+    Coliforms = log10(Coliforms + 1),
+    Enterococci = log10(Enterococci + 1))
+summary(sn)
 
 
+```
+
+Next, we can do some explortatory analysis:
+
+```{r}
+ggscatmat(sn,  color="Recipe", alpha = .3) + theme(legend.position = "bottom")
+#ggpairs(sn, aes(color=Recipe, alpha=.5))
+
+```
+
+Initial observations:
+- the original Box Behnken design can be seen looking at the top left area, seeing the distribution of values between Time, OL, and Temp.
+- E. coli and Coliforms are, unsurprisingly, very highly correlated.
+- TS and VS are highly correlated
+
+Concerns:
+- Recipe 2 day0  is strange: sCOD is 10x higher, and pH is very low
+
+Lets replot without sCOD, and some of the highly correlated ones that
+
+```{r}
+ggscatmat(sn %>% filter(!(Time == 0 & Recipe == "FWS12" )) %>% select(-TS, -Coliforms),  color="Recipe", alpha = .3) + theme(legend.position = "bottom")
+```
+
+sCOD still seems high day 0 in FWS13, but that my be biologically relavent.
+
+
+```{r}
+ggplot(sn, aes(x=VS, y=TS)) + geom_point() + facet_grid(~OL)  + geom_smooth()
+ggplot(sn, aes(x=VS, y=TS)) + geom_point() + facet_grid(~Temp) + geom_smooth()
+ggplot(sn, aes(x=VS, y=TS, color=Ammonia)) + geom_point() + facet_grid(~Temp) + geom_smooth()
+ggplot(sn, aes(x=VS, y=TS, color=Ammonia)) + geom_point() + facet_grid(~Temp + Recipe) + geom_smooth()
+ggplot(sn, aes(x=Time)) + geom_histogram() + facet_grid(~OL + Time)
+```
+
+
+## Modelling
+
+```{r}
+stan_data = list(
+    nbugs=3,
+    nrows=nrow(sn),
+    Temp=(sn$Temp -19)/18 + 1,
+    Ammonia=sn$Ammonia,
+    pH=sn$pH,
+    Ecoli=sn$Ecoli,
+    Coliforms=sn$Coliforms,
+    Time=sn$Time,
+    OL=sn$OL,
+    Enterococci=sn$Enterococci,
+    sCOD=sn$sCOD,
+    VS=sn$VS,
+    TS=sn$TS,
+    Recipe=as.numeric(sn$Recipe),
+    Methane=sn$Methane
+  )
+fit <- stan(
+  file = "./models/model_min.stan",
+  verbose = T,
+  chains=4,
+  data = stan_data
+)
+
+ggplot(data.frame(x = c(-5, 5)), aes(x)) +
+    stat_function(fun = dcauchy, n = 1e3, args = list(location = 1, scale = 1))
+stan_dens(fit, pars=c("recipe_effect") )
+stan_dens(fit, pars=c("load_effect"))
+plot(fit, pars=c("recipe_effect") )
+plot(fit, pars=c("load_effect"))
+plot(fit, pars=c("temp_effect"))
+plot(fit, pars=c("lp__"))
+plot(fit, pars=c("sigma"))
+plot(fit, chains=T)
+
+stan_model(fit)
+mle = optimizing(stan_model("./models/model_min.stan"), data=stan_data)
 ```

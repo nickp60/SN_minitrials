@@ -89,10 +89,10 @@ plot(res)
 ggplot(sn, aes(y=Enterococci, x=Time)) + 
   facet_wrap(~Temp + OL, ncol=3) +
   geom_jitter(width = .1, height = .1) + geom_smooth(method="lm",formula = "y~x")
-ggplot(sn, aes(y=HRT, x=OLR)) + geom_jitter(width = .1, height = .1) + geom_smooth(method="lm",formula = "y~x")
-ggplot(sn, aes(y=HRT, x=TS)) + geom_jitter(width = .1, height = .1) + geom_smooth(method="lm",formula = "y~x")
-ggplot(sn, aes(y=HRT, x=TS)) + geom_jitter(width = .1, height = .1) + geom_smooth(method="lm",formula = "y~x")
-ggpairs(sn %>% filter(HRT==3), aes(color=Recipe, alpha=.2))
+ggplot(sn, aes(y=Time, x=OL)) + geom_jitter(width = .1, height = .1) + geom_smooth(method="lm",formula = "y~x")
+ggplot(sn, aes(y=Time, x=TS)) + geom_jitter(width = .1, height = .1) + geom_smooth(method="lm",formula = "y~x")
+ggplot(sn, aes(y=Time, x=TS)) + geom_jitter(width = .1, height = .1) + geom_smooth(method="lm",formula = "y~x")
+ggpairs(sn %>% filter(Time==3), aes(color=Recipe, alpha=.2))
 #ggscatmat(sn[, c("Temp", "OLR", "pH", "alpha", "Recipe")],  color="Recipe", alpha = .2)
 ggscatmat(sn %>% select(-Temp, -OLR, -alpha),  color="Recipe", alpha = .3)
 sn_bn <- sn %>% 
@@ -150,6 +150,5 @@ plot(fit, pars=c("sigma"))
 plot(fit, chains=T)
 
 stan_model(fit)
-mle = optimizing(  file = "../models/model_min.stan",
-, data=c("methane", "VS"))
+mle = optimizing( stan_model(file = "./models/model_min.stan"), data=c("Methane", "VS"))
 
