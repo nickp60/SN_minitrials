@@ -133,7 +133,7 @@ Note that the conditions were set to have 3 different loading rates, which we wi
 
 Next, we can do some explortatory analysis:
 
-```{r}
+```{r, cache=TRUE, fig.width=10, fig.height=10}
 sn$OL <- as.factor(sn$OL)
 ggscatmat(sn,  color="Recipe", alpha = .3) + theme(legend.position = "bottom") 
 #ggpairs(sn, aes(color=Recipe, alpha=.5))
@@ -148,7 +148,7 @@ Initial observations:
 
 Lets replot without some of the highly correlated ones that
 
-```{r}
+```{r  fig.width=10, fig.height=10}
 ggscatmat(sn %>% select(-TS, -Coliforms),  color="Recipe", alpha = .3) + theme(legend.position = "bottom")
 ```
 
@@ -298,7 +298,7 @@ plot(fit, pars=c("temp_effect"))
 plot(fit, pars=c("lp__"))
 
 #stan_model(fit)
-mle = optimizing(stan_model("./models/model_min.stan"), data=stan_data)
+(mle = optimizing(stan_model("./models/model_min.stan"), data=stan_data))
 ```
 
 
