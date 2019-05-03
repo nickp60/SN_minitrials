@@ -11,6 +11,7 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(rstan)
+library(bayesplot)
 library(GGally)
 ggplot2::theme_set(ggplot2::theme_minimal() + ggplot2::theme(
   rect = element_rect(fill = "transparent"),
@@ -40,6 +41,10 @@ fn = local({
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 ```
+## change log
+- 2019-05-03: fixed sCOD values,  fixed methane values in export
+- 2019-05-02: after meeting, update calculations for day 0 values. 
+- 2019-05-01: setup .Rmd, incorporate inital day 0 values
 
 ## Introduction
 
@@ -92,7 +97,7 @@ day0<- rbind(
   day0 %>% transform(Temp=replace(Temp,Temp==37, 19)),
   day0 %>% transform(Temp=replace(Temp,Temp==37, 55))
 ) 
-names(sn_raw)
+names(main_data)
 names(day0)
 sn_raw <- rbind(main_data, day0)
 
@@ -282,27 +287,19 @@ fit <- stan(
   chains=4,
   data = stan_data
 )
-plot_pars <- c(names(fit)[!startsWith(prefix = "bugs", names(fit))])
-plot(fit, pars=plot_pars, plotfun = "trace", inc_warmup = F, chains=T)
-
+plot_pars <- names(fit)[!startsWith(prefix = "bugs", names(fit))]
+plot(fit, pars=plot_pars, plotfun = "trace", inc_warmup = F)
+mcmc_rhat(rhat(fit)[!startsWith(prefix = "bugs", names(fit))]) + yaxis_text(hjust = 0)
 ggplot(data.frame(x = c(-5, 5)), aes(x)) +
     stat_function(fun = dcauchy, n = 1e3, args = list(location = 1, scale = 1))
-stan_dens(fit, pars=c("recipe_effect") )
-stan_dens(fit, pars=c("load_effect"))
-plot(fit, pars=c("recipe_effect") )
-plot(fit, pars=c("load_effect"))
+stan_dens(fit, pars=c("recipe_effect"))
+plot(fit, pars=c("recipe_effect"))
 plot(fit, pars=c("temp_effect"))
 plot(fit, pars=c("lp__"))
-plot(fit,  pars=c("lp__"),  plotfun = "trace", inc_warmup = F, chains=T)
 
-stan_model(fit)
+#stan_model(fit)
 mle = optimizing(stan_model("./models/model_min.stan"), data=stan_data)
 ```
 
 
 
-# change log
-
-- 2019-05-02: after meeting, update calculations for day 0 values. 
-
-- 2019-05-01: setup .Rmd, incorporate inital day 0 values
