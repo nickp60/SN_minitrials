@@ -12,6 +12,30 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(rstan)
 library(GGally)
+ggplot2::theme_set(ggplot2::theme_minimal() + ggplot2::theme(
+  rect = element_rect(fill = "transparent"),
+  #plot.background = element_rect(fill = "#FAFAFA", color=NA),
+  plot.background = element_rect(fill = "transparent", color=NA),
+  axis.text = element_text(size=12),
+  strip.background = element_rect(fill = "grey95", color=NA),
+  strip.text = element_text(face="bold"),
+  axis.title  = element_text(size=16),
+  panel.grid.minor.x = element_blank(),
+  title = element_text(size=20), 
+  plot.caption=element_text(hjust = 0),
+  legend.text =  element_text(size=12), plot.subtitle = element_text(size=12, colour = "grey60"),
+  legend.position = "bottom"
+)
+)
+fn = local({
+  # from https://github.com/yihui/knitr-examples/blob/master/070-caption-num.Rmd 
+  
+  i = 0
+  function(x) {
+    i <<- i + 1
+    paste('Figure ', i, ': ', x, sep = '')
+  }
+})
 
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
@@ -56,14 +80,22 @@ There are 3 recipes, with different slurry:food waste ratios of 1:2, 1:3, and 3:
 
 ## Data explorations
 
-First thing we did was read in the main data file and merge it with the day 0 data. Then, we convert log-scale the the indicator bacteria counts, adding a dummy value of 1 to prevent errors of logging 0.
+First thing we did was read in the main data file and merge it with the day 0 data. Because the day zero are true for all temperatures, we duplicate the data for the 19 and 55 degree conditions. Then, we convert log-scale the the indicator bacteria counts, adding a dummy value of 1 to prevent errors of logging 0.
 
 
 ```{r reading_data}
-sn_raw <- rbind(
-  read.csv("./data/clean/trial_data.csv"),
-  read.csv("./data/clean/day0.csv", skip=3, skipNul = T)
-)
+main_data <- read.csv("./data/clean/trial_data.csv")
+day0 <- read.csv("./data/clean/day0.csv", skip=3, skipNul = T, stringsAsFactors = F)
+day0 <- day0 %>% select(-fs_conc, -fs_vol, -inoc_conc, -inoc_vol) %>% spread(key = measurement, value = Value)
+day0<- rbind(
+  day0,
+  day0 %>% transform(Temp=replace(Temp,Temp==37, 19)),
+  day0 %>% transform(Temp=replace(Temp,Temp==37, 55))
+) 
+names(sn_raw)
+names(day0)
+sn_raw <- rbind(main_data, day0)
+
 sn <- sn_raw %>%
   rowwise() %>% 
   transform(
@@ -72,14 +104,33 @@ sn <- sn_raw %>%
     Coliforms = log10(Coliforms + 1),
     Enterococci = log10(Enterococci + 1))
 summary(sn)
+```
 
+It may prove useful to note the components of the three recipes.  The organic loading rates were calcualted based on the volitile solid quantity.  the recepies are ratios of 2 of three ingrrerdiates (not including the innoculum, which is added as discussed above):  dairy cattle slurry(DCS), Fats Oils and Grease (FOG), and restauraant food waste (RFW).
+- FWS12: 1:2 FOG:DCS
+- FWS13: DCS:RFW 1:3 
+- FWS31: DCS:RFW 3:1  
+
+We add those proportion to the data.  Then, we save the cleaned, prepated data. 
+
+```{r}
+recipes <- data.frame(
+  Recipe= c("FWS12","FWS13","FWS31"),
+  RFW= as.factor(round(c(0, 3/4, 1/4), 2)),
+  DCS=as.factor(round(c(1/3, 1/4, 3/4),2)),
+  FOG=as.factor(round(c(2/3, 0, 0), 2))
+)
+sn <- merge(sn, recipes, by="Recipe")
 write.csv(sn, "data/clean/cleaned_combined_minitrial_data.csv")
 ```
+
+Note that the conditions were set to have 3 different loading rates, which we will treat as categorical because while they are numerical values of .5, 2, or 3.5, these are not observed values.  There for we set them to be factors (which allows for categories to be ranked by a inheirent value). 
 
 Next, we can do some explortatory analysis:
 
 ```{r}
-ggscatmat(sn,  color="Recipe", alpha = .3) + theme(legend.position = "bottom")
+sn$OL <- as.factor(sn$OL)
+ggscatmat(sn,  color="Recipe", alpha = .3) + theme(legend.position = "bottom") 
 #ggpairs(sn, aes(color=Recipe, alpha=.5))
 
 ```
@@ -96,17 +147,114 @@ Lets replot without some of the highly correlated ones that
 ggscatmat(sn %>% select(-TS, -Coliforms),  color="Recipe", alpha = .3) + theme(legend.position = "bottom")
 ```
 
-sCOD still seems high day 0 in FWS13, but that my be biologically relavent.
+
+Lets look at the indocators
+### Enterococci
+```{r}
+ggplot(sn, aes(x=Time, y=Enterococci, color=as.factor(Temp))) +
+  geom_point() + facet_wrap(~OL+Recipe)  + geom_smooth(method = lm) + 
+  labs(caption=fn("Effect of OL and Recipe"), color="")
+```
+
+It looks like for FWS12 the levels of enterococci stay the same, but in all the FSW13, FWS31, the levels seems to increase or decrease over time. We can try to determine if that is due to   
+```{r}
+
+ggplot(sn, aes(x=Time, y=Enterococci, color=as.factor(Temp))) + 
+  geom_point() + 
+  labs(caption=fn("Effect of OL vs DCS"), color="") +
+  facet_wrap(~OL+DCS)  + 
+  geom_smooth(method = lm)
+
+ggplot(sn, aes(x=Time, y=Enterococci, color=as.factor(Temp))) + 
+  labs(caption=fn("Effect of OL vs RFW"), color="") +
+  geom_point() + facet_wrap(~OL+RFW)  + 
+  geom_smooth(method = lm)
+ggplot(sn, aes(x=Time, y=Enterococci, color=as.factor(Temp))) +
+  geom_point() + 
+  labs(caption=fn("Effect of Temp"), color="") +
+  facet_wrap(~RFW)  + geom_smooth(method = lm)
+ggplot(sn, aes(x=Temp, y=Enterococci, color=as.factor(RFW))) + 
+  labs(caption=fn("Effect of RFW"), color="") +
+  geom_point() + geom_smooth(method = lm)
+
+```
+Those rates seem to indicate 2 things:
+
+- that the higher proportion of restaurant food waste, the better enterococci survive
+- regardless of the proportion of RFW, increased temperature inhibits Enterococci
+
+### E. coli
+
+```{r}
+ggplot(sn, aes(x=Time, y=Ecoli, color=as.factor(Temp))) +
+  geom_point() + 
+  facet_wrap(~OL+Recipe)  +
+  geom_smooth(method = lm) + 
+  labs(caption=fn("Effect of OL and Recipe"), color="")
+```
+
+E coli counts seem to depend largely on Temp rather than OL or Recipe.
 
 
 ```{r}
-ggplot(sn, aes(x=VS, y=TS)) + geom_point() + facet_grid(~OL)  + geom_smooth()
-ggplot(sn, aes(x=VS, y=TS)) + geom_point() + facet_grid(~Temp) + geom_smooth()
-ggplot(sn, aes(x=VS, y=TS, color=Ammonia)) + geom_point() + facet_grid(~Temp) + geom_smooth()
-ggplot(sn, aes(x=VS, y=TS, color=Ammonia)) + geom_point() + facet_grid(~Temp + Recipe) + geom_smooth()
-ggplot(sn, aes(x=Time)) + geom_histogram() + facet_grid(~OL + Time)
+ggplot(sn, aes(x=Time, y=Ecoli, color=as.factor(Temp))) +
+  geom_point()  + geom_smooth(method = lm) + 
+  labs(caption=fn("Effect of Temperature"), color="")
+```
+This may indicate that while die-off occurs at cold temperature, higher temperatue increases the die-off rate.
+
+
+### Coliforms
+
+Coliforms should be have the same as E. coli (as we saw theirr values being highly correlated), but lets observe:
+
+```{r}
+ggplot(sn, aes(x=Time, y=Coliforms, color=as.factor(Temp))) +
+  geom_point()  + geom_smooth(method = lm) + 
+  labs(caption=fn("Effect of Temperature"), color="")
+```
+Coliform counts too seem to depend largely on Temp rather than OL or Recipe.
+
+## Ammonia
+
+```{r}
+ggplot(sn, aes(x=Time, y=Ammonia, color=as.factor(Temp))) +
+  geom_point()  + geom_smooth(method = lm) + 
+  facet_wrap(~Recipe )  +
+  labs(caption=fn("Effect of Temperature and Recipe"), color="")
+```
+Across all recipes, Ammonia decreases as a function of time
+
+## Methane
+Methane is the only thing leaving the bioreactors (as biogas), and therefore was measured daily until detructive sampling at 3, 6, or 9 days.  We have aggregated the data in the original excel sheet.  
+
+```{r}
+ggplot(sn, aes(x=Time, y=Methane, color=as.factor(Recipe))) +
+  geom_point()  + geom_smooth(method = lm) + 
+  facet_wrap(~Temp )  +
+  labs(caption=fn("Effect of Temperature and Recipe"), color="")
+ggplot(sn, aes(x=Time, y=Methane, color=as.factor(Temp))) +
+  geom_point()  + geom_smooth(method = lm) + 
+  facet_wrap(~Recipe )  +
+  labs(caption=fn("Effect of Temperature and Recipe"), color="")
+ggplot(sn, aes(x=Time, y=Methane, color=as.factor(Temp))) +
+  geom_point()  + geom_smooth(method = lm) + 
+  facet_wrap(~Recipe + OL )  +
+  labs(caption=fn("Effect of Temperature and OL"), color="")
+```
+It looks like the rate of poduction is highest at 37, and that at the optimal  feed stocks with a high OL yield high prroduction, expecially at 37.
+
+## pH
+
+```{r}
+ggplot(sn, aes(x=Time, y=pH, color=as.factor(Recipe))) +
+  geom_point()  + geom_smooth(method = lm) + 
+  facet_wrap(~Temp )  +
+  labs(caption=fn("Effect of Temperature and Recipe"), color="")
+
 ```
 
+The range of pH is rerlatively tight, but it appears to drop with time at the temperature extremes, staying the most stable at 37
 
 ## Modelling
 
@@ -120,7 +268,7 @@ stan_data = list(
     Ecoli=sn$Ecoli,
     Coliforms=sn$Coliforms,
     Time=sn$Time,
-    OL=sn$OL,
+    OL=ifelse(sn$OL==.5, 1, ifelse(sn$OL==3.5, 3, sn$OL)),
     Enterococci=sn$Enterococci,
     sCOD=sn$sCOD,
     VS=sn$VS,
@@ -134,6 +282,8 @@ fit <- stan(
   chains=4,
   data = stan_data
 )
+plot_pars <- c(names(fit)[!startsWith(prefix = "bugs", names(fit))])
+plot(fit, pars=plot_pars, plotfun = "trace", inc_warmup = F, chains=T)
 
 ggplot(data.frame(x = c(-5, 5)), aes(x)) +
     stat_function(fun = dcauchy, n = 1e3, args = list(location = 1, scale = 1))
@@ -143,8 +293,7 @@ plot(fit, pars=c("recipe_effect") )
 plot(fit, pars=c("load_effect"))
 plot(fit, pars=c("temp_effect"))
 plot(fit, pars=c("lp__"))
-plot(fit, pars=c("sigma"))
-plot(fit, chains=T)
+plot(fit,  pars=c("lp__"),  plotfun = "trace", inc_warmup = F, chains=T)
 
 stan_model(fit)
 mle = optimizing(stan_model("./models/model_min.stan"), data=stan_data)
