@@ -109,25 +109,31 @@ sn <- sn_raw %>%
     Recipe=as.factor(Recipe),
     Ecoli =  log10(Ecoli + 1),
     Coliforms = log10(Coliforms + 1),
-    Enterococci = log10(Enterococci + 1))
+    Enterococci = log10(Enterococci + 1)) %>%
+  transform(
+    Ecoli =  ifelse(Ecoli < 1, 1, Ecoli), 
+    Coliforms = ifelse(Coliforms < 1, 1, Coliforms), 
+    Enterococci =  ifelse(Enterococci < 1, 1, Enterococci))
+
 summary(sn)
 ```
 
 It may prove useful to note the components of the three recipes.  The organic loading rates were calcualted based on the volitile solid quantity.  the recepies are ratios of 2 of three ingrrerdiates (not including the innoculum, which is added as discussed above):  dairy cattle slurry(DCS), Fats Oils and Grease (FOG), and restauraant food waste (RFW).
 
-- FWS12: 1:2 FOG:DCS
+- FWS12: FOG:DCS 1:2
 - FWS13: DCS:RFW 1:3 
 - FWS31: DCS:RFW 3:1  
 
 We add those proportion to the data.  Then, we save the cleaned, prepated data. 
 
 ```{r}
-recipes <- data.frame(
-  Recipe= c("FWS12","FWS13","FWS31"),
-  RFW= as.factor(round(c(0, 3/4, 1/4), 2)),
-  DCS=as.factor(round(c(1/3, 1/4, 3/4),2)),
-  FOG=as.factor(round(c(2/3, 0, 0), 2))
-)
+#name, FOG, RFW, DCS
+(recipes <- as.data.frame(
+  matrix(dimnames = list(c("FWS12", "FWS13", "FWS31"), c( "FOG", "RFW", "DCS")), c(
+           1/3, 0 , 2/3,
+           0, 1/4,3/4,
+           0, 3/4,1/4), ncol=3, byrow = T)))
+recipes$Recipe <- rownames(recipes)
 sn <- merge(sn, recipes, by="Recipe")
 write.csv(sn, "data/clean/cleaned_combined_minitrial_data.csv")
 ```
@@ -365,6 +371,11 @@ plot(fit, pars=c("sigma"))
 #stan_model(fit)
 (mle = optimizing(stan_model("./models/model_min.stan"), data=stan_data))
 ```
+
+
+
+
+
 
 
 
