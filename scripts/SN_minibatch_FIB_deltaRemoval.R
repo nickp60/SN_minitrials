@@ -6,20 +6,21 @@
 # and achieved removal. 
 # required removal = log cfu of FIB in feedstock -
 
+# data used can be found nickp60/SN_minitrials/data/clean/All Raw Data Mini Trial (NW).xlsx
+# where FIB are on sheet 2
 
-setwd("~/Google Drive/Personal/SN_dataAnalysis.R")
 library(ggplot2)
 library(dplyr)
 library(reshape2)
 library(ggpubr)
-source('/Users/cam/Google Drive/Data & reports/R/setFactorOrder.R') # function for defining factor order
+source('setFactorOrder.R') # function for defining factor order; function can be found at end of this script
 
 ## === reading in data & calculating required, achieved and delta removal  =======
 
 data = read.table('SN-miniBatchSheet6.txt', header=T, sep='\t')
-# this is the same data as here: but i didnt want to use excel read in.
+# or can read in directly with readxl
 # library(readxl)
-#data = read_excel("All Raw Data Mini Trial.xlsx", sheet=1)
+#data = read_excel("All Raw Data Mini Trial (NW).xlsx", sheet=1)
 
 head(data) # here is what the raw data look like: 
 # Recipe Temp OLR HRT   pH Coliforms E.coli Enterococci
@@ -30,7 +31,7 @@ head(data) # here is what the raw data look like:
 # 5      2   37 0.5   3 7.40    953000 953000      242000
 # 6      2   55 0.5   6 7.45         0      0           0
 
-# read in FS FIB data (found in sheet 2 of SN's "All Raw Data Mini Trial.xlsx")
+# read in FS FIB data (found in sheet 3 of SN's "All Raw Data Mini Trial.xlsx")
 FSdata = read.table('SN_FIB_FS.txt', header=T, sep='\t')
 
 datay = subset(data, select=-c(pH)) # not doing anything with pH variable so remove
@@ -331,3 +332,34 @@ ggsave("SN_minibatch_55C_dRemoval.pdf",deg55title, width=12, height=8.5, units="
 
 
 ## ====== end ======= 
+
+
+setFactorOrder <- function(x, order=sort(levels(x))) { 
+  # Returns a factor ordered by `order`.  
+  # If order is missing, defaults to `levels(x)` if available, else to `sort(unique(x))`
+  # Useful for ggplot and elsewhere were ordering is based on the order of the levels
+  
+  if (!is.factor(x)) {
+    warning("`x` is not a factor. Will coerce.")
+    levs <- sort(unique(x))
+    if (missing(order))
+      order <- levs
+  } else {
+    levs <- levels(x)
+  }
+  
+  # any values in order, not in levels(x)
+  NotInx <- setdiff(order, levs)
+  
+  if (length(NotInx)) {
+    warning ("Some values not in x:\n", paste(NotInx, collapse=", "))
+  }
+  
+  # levels(x) not explicitly named in order
+  Remaining <-  setdiff(levs, order)
+  
+  order <- c(setdiff(order, NotInx), Remaining)
+  
+  factor(x, level=order)
+}
+
