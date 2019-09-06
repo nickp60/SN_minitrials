@@ -55,7 +55,7 @@ There are 3 recipes, with different slurry:food waste ratios of 1:2, 1:3, and 3:
 
 
 
-## Data explorations
+## Data Aggregation
 
 First thing we did was read in the main data file and merge it with the day 0 data. Because the day zero are true for all temperatures, we duplicate the data for the 19 and 55 degree conditions. Then, we convert log-scale the the indicator bacteria counts, adding a dummy value of 1 to prevent errors of logging 0.
 

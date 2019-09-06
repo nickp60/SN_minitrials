@@ -427,8 +427,8 @@ $(document).ready(function () {
 </ul>
 </div>
 </div>
-<div id="data-explorations" class="section level2">
-<h2>Data explorations</h2>
+<div id="data-aggregation" class="section level2">
+<h2>Data Aggregation</h2>
 <p>First thing we did was read in the main data file and merge it with the day 0 data. Because the day zero are true for all temperatures, we duplicate the data for the 19 and 55 degree conditions. Then, we convert log-scale the the indicator bacteria counts, adding a dummy value of 1 to prevent errors of logging 0.</p>
 <pre class="r"><code>main_data &lt;- read.csv(&quot;./data/clean/trial_data.csv&quot;)
 day0 &lt;- read.csv(&quot;./data/clean/day0.csv&quot;, skip=3, skipNul = T, stringsAsFactors = F)
