@@ -1,7 +1,7 @@
 ---
-title: "Modelling _E. coli_ die-off in mini trials"
+title: "Exploratory Data Analysis for Mini Trials"
 author: "Nicholas Waters"
-date: "2/5/2019"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
 editor_options: 
   chunk_output_type: console
@@ -10,8 +10,6 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
-library(rstan)
-library(bayesplot)
 library(GGally)
 ggplot2::theme_set(ggplot2::theme_minimal() + ggplot2::theme(
   rect = element_rect(fill = "transparent"),
@@ -37,105 +35,11 @@ fn = local({
   }
 })
 
-options(mc.cores = parallel::detectCores())
-rstan_options(auto_write = TRUE)
-```
-## change log
-
-- 2019-06-04: improve model fit and description
-- 2019-05-03: fixed sCOD values,  fixed methane values in export
-- 2019-05-02: after meeting, update calculations for day 0 values. 
-- 2019-05-01: setup .Rmd, incorporate inital day 0 values
-
-## Introduction
-
-## The Data
-
-### Main dataset
-Data is stored in this repo's `data` dir.  The `raw` directory contains the raw data files recieved, which were copied to the `clean` dir, and modified as needed. 
-
-The bulk of the data was from file "Box Behnken analysis.xlsx", recieved from RN via Skype on 2019-02-27, and this file was an updated version of the earlier "All Raw Data Mini Trial.xlsx" file.  The data were in the "Block on rep" and "methane" tabs.
-
-The main changes to "Box Behnken analysis" that were made:
-
-- label OLR was changed to OL to reflect the time-independant nature of the value
-- label HRT was changed to time, for the inverse reason
-- the methane aggretation was fixed to prevent values from being summed twice
-- addition of an "export" tab, for exporting to csv.
-
-All these changes can be found in "./data/clean/Box Behnken analysis_nick_27.02.19.xlsx", and exported as "./data/clean/trial_data.csv".
-
-### Day 0 Values
-After discussion about the experimental setup and the move to a time-based model rather than the Box Behnken analysis, we requested the Day 0 values for the 3 feedstocks, innoculum, and their mixtures. The file "Mini Trial FS FIB TS&VS.xlsx" was recieved 2019-04-30 from SN.  
-
-Data was aggregated and exported as "./data/clean/day0.csv" from the "day0" worksheet I added.
-
-### Processed data
-The results of the two datasets are combined and written to the `clean` folder as `cleaned_combined_minitrial_data.csv`.
-
-### A note about experimental design and terms
-Three things are mixed in these reractors: slurry, Food waste, and the iccoculum (from an AD reactor)
-Recipe may be used interchangably with Feedstock.
-There are 3 recipes, with different slurry:food waste ratios of 1:2, 1:3, and 3:1.
-
-- *OL*: organic load, expressed in g VS/L
-- sCOD: the soluble Chemical Oxygen Demand
-
-
-## Todo
-- incorporate innoculumn sCOD values when recieved; either retest orr impute pH.  
-
-## Data explorations
-
-First thing we did was read in the main data file and merge it with the day 0 data. Because the day zero are true for all temperatures, we duplicate the data for the 19 and 55 degree conditions. Then, we convert log-scale the the indicator bacteria counts, adding a dummy value of 1 to prevent errors of logging 0.
-
-
-```{r reading_data}
-main_data <- read.csv("./data/clean/trial_data.csv")
-day0 <- read.csv("./data/clean/day0.csv", skip=3, skipNul = T, stringsAsFactors = F)
-day0 <- day0 %>% select(-fs_conc, -fs_vol, -inoc_conc, -inoc_vol) %>% spread(key = measurement, value = Value)
-day0<- rbind(
-  day0,
-  day0 %>% transform(Temp=replace(Temp,Temp==37, 19)),
-  day0 %>% transform(Temp=replace(Temp,Temp==37, 55))
-) 
-names(main_data)
-names(day0)
-sn_raw <- rbind(main_data, day0)
-
-sn <- sn_raw %>%
-  rowwise() %>% 
-  transform(
-    Recipe=as.factor(Recipe),
-    Ecoli =  log10(Ecoli + 1),
-    Coliforms = log10(Coliforms + 1),
-    Enterococci = log10(Enterococci + 1)) %>%
-  transform(
-    Ecoli =  ifelse(Ecoli < 1, 1, Ecoli), 
-    Coliforms = ifelse(Coliforms < 1, 1, Coliforms), 
-    Enterococci =  ifelse(Enterococci < 1, 1, Enterococci))
-
-summary(sn)
 ```
 
-It may prove useful to note the components of the three recipes.  The organic loading rates were calcualted based on the volitile solid quantity.  the recepies are ratios of 2 of three ingrrerdiates (not including the innoculum, which is added as discussed above):  dairy cattle slurry(DCS), Fats Oils and Grease (FOG), and restauraant food waste (RFW).
-
-- FWS12: FOG:DCS 1:2
-- FWS13: DCS:RFW 1:3 
-- FWS31: DCS:RFW 3:1  
-
-We add those proportion to the data.  Then, we save the cleaned, prepated data. 
-
+## Data exploration
 ```{r}
-#name, FOG, RFW, DCS
-(recipes <- as.data.frame(
-  matrix(dimnames = list(c("FWS12", "FWS13", "FWS31"), c( "FOG", "RFW", "DCS")), c(
-           1/3, 0 , 2/3,
-           0, 1/4,3/4,
-           0, 3/4,1/4), ncol=3, byrow = T)))
-recipes$Recipe <- rownames(recipes)
-sn <- merge(sn, recipes, by="Recipe")
-write.csv(sn, "data/clean/cleaned_combined_minitrial_data.csv")
+sn <- read.csv("data/clean/cleaned_combined_minitrial_data.csv")
 ```
 
 Note that the conditions were set to have 3 different loading rates, which we will treat as categorical because while they are numerical values of .5, 2, or 3.5, these are not observed values.  There for we set them to be factors (which allows for categories to be ranked by a inheirent value). 
@@ -144,7 +48,8 @@ Next, we can do some explortatory analysis:
 
 ```{r, cache=TRUE, fig.width=10, fig.height=10}
 sn$OL <- as.factor(sn$OL)
-ggscatmat(sn,  color="Recipe", alpha = .3) + theme(legend.position = "bottom") 
+ggscatmat(sn %>% 
+            select(-FOG, -BW, -DCS, -init_Coliforms, -init_Ecoli, -init_Enterococci), color="Recipe", alpha = .3) + theme(legend.position = "bottom")
 #ggpairs(sn, aes(color=Recipe, alpha=.5))
 
 ```
@@ -159,7 +64,9 @@ Initial observations:
 Lets replot without some of the highly correlated ones that
 
 ```{r  fig.width=10, fig.height=10}
-ggscatmat(sn %>% select(-TS, -Coliforms),  color="Recipe", alpha = .3) + theme(legend.position = "bottom")
+ggscatmat(sn %>% 
+            select(-TS, -Coliforms ) %>%
+            select(-FOG, -BW, -DCS, -init_Coliforms, -init_Ecoli, -init_Enterococci), color="Recipe", alpha = .3) + theme(legend.position = "bottom")
 ```
 
 
@@ -170,7 +77,7 @@ Lets look at the indicators
 ```{r, echo=F}
 ggplot(sn, aes(x=Time, y=Enterococci, color=as.factor(Recipe))) +
   geom_point() + facet_wrap(~Temp)  + geom_smooth(method = lm) + 
-  labs(subtitle="Dieoff only occurs at 55", 
+  labs(subtitle=" Enterococci dieoff only occurs at 55", 
        caption=fn("Effect of Temperature"), color="")
 
 ```
@@ -196,22 +103,22 @@ ggplot(sn, aes(x=Time, y=Enterococci, color=as.factor(DCS))) +
   facet_wrap(~OL+Temp)  + 
   geom_smooth(method = lm)
 
-ggplot(sn, aes(x=Temp, y=Enterococci, color=as.factor(RFW))) + 
-  labs(caption=fn("Effect of Temp"), color="RFW") +
+ggplot(sn, aes(x=Temp, y=Enterococci, color=as.factor(BW))) + 
+  labs(caption=fn("Effect of Temp"), color="BW") +
   geom_point() + geom_smooth(method = lm)
 
 ggplot(sn, aes(x=Time, y=Enterococci, color=as.factor(Temp))) +
   geom_point() + 
-  labs(subtitle="At 19 and 37, presence of RFW increases Enterococci survival",
-       caption=fn("Effect of RFW"), color="") +
-  facet_wrap(~RFW)  + geom_smooth(method = lm)
+  labs(subtitle="At 19 and 37, presence of BW increases Enterococci survival",
+       caption=fn("Effect of BW"), color="") +
+  facet_wrap(~BW)  + geom_smooth(method = lm)
 
 ```
 
 Those rates seem to indicate 2 things:
 
 - that the higher proportion of restaurant food waste, the better enterococci survive
-- regardless of the proportion of RFW, increased temperature inhibits Enterococci
+- regardless of the proportion of BW, increased temperature inhibits Enterococci
 
 ### E. coli
 
@@ -324,58 +231,192 @@ ggplot(sn, aes(x=Time, y=pH, color=as.factor(Recipe))) +
 
 The range of pH is rerlatively tight, but it appears to drop with time at the temperature extremes, staying the most stable at 37
 
-## Modelling
+
+
+## Plots for paper:
 
 ```{r}
-stan_data = list(
-    nbugs=3,
-    nrows=nrow(sn),
-    Temp=(sn$Temp -19)/18 + 1,
-    Ammonia=sn$Ammonia,
-    pH=sn$pH,
-    Ecoli=sn$Ecoli,
-    Coliforms=sn$Coliforms,
-    Time=sn$Time,
-    OL=ifelse(sn$OL==.5, 1, ifelse(sn$OL==3.5, 3, sn$OL)),
-    Enterococci=sn$Enterococci,
-    sCOD=sn$sCOD,
-    VS=sn$VS,
-    TS=sn$TS,
-    Recipe=as.numeric(sn$Recipe),
-    Methane=sn$Methane
-  )
-fit <- stan(
-  file = "./models/model_min.stan",
-  verbose = T,
-  chains=4,
-  data = stan_data
-)
-plot_pars <- names(fit)[!grepl("hat", names(fit))]
-plot(fit, pars=plot_pars, plotfun = "trace", inc_warmup = F)
-mcmc_rhat(rhat(fit)[plot_pars]) + yaxis_text(hjust = 0)
+fn = local({
+  # from https://github.com/yihui/knitr-examples/blob/master/070-caption-num.Rmd 
+  i = 0
+  function(x) {
+    i <<- i + 1
+    paste('Figure ', i, ': ', x, sep = '')
+  }
+})
+sntall <- sn %>% gather(key = "FIB", value = "Count", Ecoli, Coliforms, Enterococci) %>%
+   gather(key = "initbug", value = "init_count", init_Ecoli, init_Coliforms, init_Enterococci) %>% 
+  filter(FIB == gsub("init_", "", initbug)) 
+sntall$initbug <- gsub("init_", "", sntall$initbug)
+#sntall$init_count <- ifelse(sntall$FIB == sntall$initbug, sntall$init_count, 10)
+#sntall$rec_color <- c("darkred", "purple", "brown")[as.factor(sntall$Recipe)]
+ggplot(sntall, aes(x=Time, y=Count, color=as.factor(Recipe))) +
+  geom_hline(aes(yintercept=init_count, color=Recipe),linetype="dashed") +
+  geom_hline(yintercept = 3,linetype="solid", color="grey80") +
+  geom_point() + facet_wrap(~FIB+Temp)  + geom_smooth(method = lm) + 
+  scale_x_continuous(breaks=c(0,3,6,9)) + 
+  scale_y_continuous(breaks= seq(2,8, 1)) +
+  coord_cartesian(ylim =  c(1.5, 8)) +
+  annotation_logticks(base = 10, sides = "l",scaled=TRUE, alpha=.4) +
+  labs(
+    x="Day",
+    y=expression(paste("Log CFU/g")),
+    #subtitle="Dieoff only occurs at 55", 
+    #caption=fn("Effect of Temperature"), 
+    caption=fn("Effect of Temperature and Recipe"),
+    color="")
 
-#ggplot(data.frame(x = c(-5, 5)), aes(x)) +
-#    stat_function(fun = dcauchy, n = 1e3, args = list(location = 0, scale = 1))
-stan_dens(fit, pars=plot_pars[grepl("recipe", plot_pars)])
-plot(fit, pars=plot_pars[grepl("recipe", plot_pars)])
+ggplot(sn, aes(x=Time, y=Methane, color=as.factor(Recipe)))+#, shape=as.factor(OL))) +
+  geom_point()  + geom_smooth(method = lm) + 
+  facet_wrap(~Temp )  +
+  labs(caption=fn("Effect of Temperature and Recipe"), color="")
 
-stan_dens(fit, pars=plot_pars[grepl("temp", plot_pars)])
-plot(fit, pars=plot_pars[grepl("temp", plot_pars)])
 
-stan_dens(fit, pars=plot_pars[grepl("ol", plot_pars)])
-plot(fit, pars=plot_pars[grepl("ol", plot_pars)])
 
-plot(fit, pars=c("lp__"))
-plot(fit, pars=c("sigma"))
-
-#stan_model(fit)
-(mle = optimizing(stan_model("./models/model_min.stan"), data=stan_data))
 ```
 
 
+Here we have a function to make the removal plots:
+```{r}
+make_delta_plot <- function(
+  sntall, 
+  grps=c("FIB","Time", "Recipe", "Temp", "OL"),
+  shapes=F,
+  size=T,
+  times=c(6,9), OLs=c(.5, 2, 3.5),
+  error="sem")
+{
+  newdf2 <- sntall %>% filter(OL %in% OLs) %>%   droplevels() 
+  grpvars <- syms(grps)
+  newdf2$removal <- - newdf2$init_count + newdf2$Count  + 3
+  newdf <- newdf2 %>% group_by(!!!grpvars) %>%
+    filter(Time %in% times) %>%
+    #group_by(FIB, Time, Recipe, Temp) %>% 
+    summarize(meen = mean(removal),
+            medin = median(removal),
+            # confirm groupings allow for proper error propogation
+            propsdev = sqrt(sd(init_count)^2 + sd(Count)^2),
+            sdev = sd(removal),
+            sem = sd(removal)/sqrt(n()),
+            sum = sum(removal),
+            n = n(),
+            q1 = quantile(removal, 0.25),
+            q3 = quantile(removal, 0.75))
+  if (error == "sem"){
+    newdf$error <- newdf$sem
+  } else if (error == "sd"){
+    newdf$error <- newdf$sdev
+  } else{
+    stop("Only options for error are sd and sem!")
+  }
+  if (!shapes || !"OL" %in% grps){
+    newdf$thisshape <- "Combined OLs"
+    shape_labels <- c("Combined OLs")
+    shape_breaks <- c(21)
+  } else {
+    newdf$thisshape <- c(21, 23, 24, 25)[as.numeric(as.factor(newdf$OL))]
+    shape_labels <- unique(c("21", "23", "24", "25")[as.numeric(as.factor(newdf$OL))])
+    shape_breaks <- unique(c(21, 23, 24, 25)[as.numeric(as.factor(newdf$OL))])
+    newdf$thisshape <- newdf$OL
+  }
+  if (size){
+    newdf$nsize = newdf$n / 4
+    newdf$nlabel = newdf$n 
+    size_guide = guide_legend()
+  } else{
+    newdf$nsize = 1
+    newdf$nlabel = "nope" 
+    size_guide = "none"
+  }
+  newdf$tempcol = case_when( 
+    newdf$Temp == 19 ~ "blue",
+    newdf$Temp == 37 ~ "purple",
+    newdf$Temp == 55 ~ "red")
+  # get the areas sorted -- genom area doesnt extend, and ends  up looking lame.
+  ids <- factor(c("initgood", "initbad", "good", "bad"))
+  values <- data.frame(
+    id = ids,
+    value = c("#044702","#470202", "green", "red")
+  )
+  positions <- data.frame(
+    id = rep(ids, each = 4),
+    x = c(c(-1.5, -1.5, 1.5, 1.5), c(-1.5, -1.5, 1.5, 1.5), c(1.5, 1.5, 10, 10), c(10, 10, 1.5, 1.5))/3,
+    y = c(c(-10, 0, 0, -10), c(0, 10, 10, 0), c(-10, 0, 0, -10), c(0, 10, 10, 0)),
+    alpha=c(rep(.15, 8), rep(.08, 8))
+  )
+  # Currently we need to manually merge the two together
+  datapoly <- merge(values, positions, by = c("id"))
+  (p <- ggplot() +
+      geom_polygon(data=datapoly,  
+                   aes(y=y, x=x, fill = value, group = id, alpha=alpha)) + 
+      scale_fill_identity() +
+      scale_alpha_identity(guide=F)  +
+      theme(plot.caption = element_text(size=8),
+        #    panel.grid = element_blank(),
+        panel.grid.minor  = element_blank(),
+        panel.grid.major.y =  element_blank(),
+        panel.grid.major.x =  element_line(color="gray95"),
 
+      ) +
+      geom_hline(yintercept = 0,linetype="solid", color="grey70", size=.5) +
+      #scale_x_continuous(breaks=rev(c(0,3,6,9)), ) + 
+      geom_errorbar(
+        data=newdf,
+        aes(
+          x=Time/3,ymin=meen-error, ymax=meen+error, 
+          group=interaction(!!!syms(grps[!grps %in% c("Time", "FIB")])), 
+          color=tempcol
+        ),
+        alpha=0.7, 
+        width=.3,
+        position=position_dodge(width =.5), 
+      ) +
+      geom_point(
+        data=newdf,
+        aes(
+          x=Time/3, y=meen,  
+          shape=thisshape,
+          size=nsize,
+          group=interaction(!!!syms(grps[!grps %in% c("Time", "FIB")])), fill=tempcol, 
+        ),
+        alpha=.8, 
+        #size=2,
+        color="black",
+        position=position_dodge(width =.5), 
+      ) + 
+      facet_grid(Recipe ~ FIB, scales="free_y") + 
+      # scale_x_reverse(breaks=c(0,3,6,9)) + 
+      scale_x_reverse(breaks=times/3, labels=as.character(times)) + 
+      scale_y_continuous(breaks=c( -2, 0, 2, 4)) + 
+#      scale_shape_identity() +
+      scale_shape_manual(values = c(21, 23, 24, 25), guide="legend") + 
+      scale_size_identity("", 
+                          labels=unique(newdf$nlabel),
+                          breaks=unique(newdf$nsize),
+                          guide="legend") + 
+      # scale_shape_identity("",
+      #                      #labels = shape_labels,
+      #                      #breaks = "21", #shape_breaks,
+      #                      guide = "legend") +
 
+      scale_color_identity("", 
+                           labels = unique(newdf$Temp), 
+                           breaks = unique(newdf$tempcol),
+                           guide = "legend") +
+    guides(color = guide_legend(override.aes = list(size = 2)),
+           shape = guide_legend(override.aes = list(size = 2)),
+           size = size_guide) +
+      labs(x="Days", y=expression(Delta~Log(CFU)),  color="Temp", shape="", 
+           title="Meeting EU pathogen removal regulations", subtitle="EU regultations require FIB counts to be less than 3000 CFUs.\nGreen/red zones indicates sufficient/insufficient pathogen removal respectively",
+           caption=paste("Groups:", paste(grps, collapse= ", "), "\nOLs:", paste(OLs, collapse= ", "), "\nn>=4")) +
+      #coord_cartesian() +
+      coord_flip(xlim=c(min(times/3) -.5, max(times/3) +.5), 
+                 ylim=c(min(newdf$meen) -.5, max(newdf$meen) + .5)) 
+  )
+  return(p)
+}
+(p1 <- make_delta_plot(sntall, grps=c("FIB","Time", "Recipe", "Temp", "OL"), times=c(0, 3, 6, 9), OLs=c(.5, 2, 3.5), shapes=T, size=T, error="sem"))
 
-
-
+ggsave(p1, filename = "./removalplot.png", device = "png", width = 7, height = 6)
+```
 

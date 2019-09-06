@@ -7,16 +7,29 @@ library(rstan)
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 
-sn_raw <- read.csv("~/GitHub/SN_minitrials/data/clean/trial_data.csv")
+main_data <- read.csv("../data/clean/trial_data.csv")
+day0 <- read.csv("../data/clean/day0.csv", skip=3, skipNul = T, stringsAsFactors = F)
+day0 <- day0 %>% select(-fs_conc, -fs_vol, -inoc_conc, -inoc_vol) %>% spread(key = measurement, value = Value)
+day0<- rbind(
+  day0,
+  day0 %>% transform(Temp=replace(Temp,Temp==37, 19)),
+  day0 %>% transform(Temp=replace(Temp,Temp==37, 55))
+) 
+names(main_data)
+names(day0)
+sn_raw <- rbind(main_data, day0)
+
 sn <- sn_raw %>%
   rowwise() %>% 
   transform(
     Recipe=as.factor(Recipe),
     Ecoli =  log10(Ecoli + 1),
     Coliforms = log10(Coliforms + 1),
-    Enterococci = log10(Enterococci + 1))
-write.table(sn, file="../data/clean/tidy.csv", row.names = F, sep=",")
-table(sn$Recipe)
+    Enterococci = log10(Enterococci + 1)) %>%
+  transform(
+    Ecoli =  ifelse(Ecoli < 1, 1, Ecoli), 
+    Coliforms = ifelse(Coliforms < 1, 1, Coliforms), 
+    Enterococci =  ifelse(Enterococci < 1, 1, Enterococci))
 
 ggplot(sn, aes(x=VS, y=TS)) + geom_point() + facet_grid(~OL)  + geom_smooth()
 ggplot(sn, aes(x=VS, y=TS)) + geom_point() + facet_grid(~Temp) + geom_smooth()
