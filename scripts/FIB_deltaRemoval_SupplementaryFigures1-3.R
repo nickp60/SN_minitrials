@@ -19,7 +19,7 @@ source('setFactorOrder.R') # function for defining factor order; function can be
 
 ## === reading in data & calculating required, achieved and delta removal  =======
 
-data = read_excel("All Raw Data Mini Trial (NW).xlsx", sheet=1)
+data = read_excel("All Raw Data Mini Trial.xlsx", sheet=1)
 
 head(data) # here is what the raw data look like: 
 # Recipe Temp OLR HRT   pH Coliforms E.coli Enterococci
@@ -31,8 +31,7 @@ head(data) # here is what the raw data look like:
 # 6      2   55 0.5   6 7.45         0      0           0
 
 # read in FS FIB data (found in sheet 3 of SN's "All Raw Data Mini Trial.xlsx")
-#FSdata = read_excel("All Raw Data Mini Trial (NW).xlsx", sheet=3)
-FSdata = read.table('SN_FIB_FS.txt', header=T, sep='\t')
+FSdata = read_excel("All Raw Data Mini Trial.xlsx", sheet=3)
 
 datay = subset(data, select=-c(pH)) # not doing anything with pH variable so remove
 test = merge(datay, FSdata, by="Recipe") # add FS (feedstock) data in by merging
