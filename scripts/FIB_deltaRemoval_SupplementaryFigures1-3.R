@@ -1,10 +1,11 @@
 
 # ::::::::::::::::::::: SN minibatch analysis of FIB :::::::::::::::::::::::::::::
 
-# this script is for creating dot plots of delta removal 
-# where d removal refers to the difference between required removal
+# Script used to create supplemenary figures 1, 2 and 3. 
+# dot plots of delta removal where d removal refers to the difference between required removal
 # and achieved removal. 
-# required removal = log cfu of FIB in feedstock -
+# Required removal = log cfu of FIB in feedstock - 3 log (EU required FIB limit for spreading of digestate)
+# Achieved removal = log cfu of FIB in feedstock - log cfu FIB in samples (ie how many FIB actually 'died')
 
 # data used can be found nickp60/SN_minitrials/data/clean/All Raw Data Mini Trial (NW).xlsx
 # where FIB are on sheet 2
@@ -13,14 +14,12 @@ library(ggplot2)
 library(dplyr)
 library(reshape2)
 library(ggpubr)
+library(readxl)
 source('setFactorOrder.R') # function for defining factor order; function can be found at end of this script
 
 ## === reading in data & calculating required, achieved and delta removal  =======
 
-data = read.table('SN-miniBatchSheet6.txt', header=T, sep='\t')
-# or can read in directly with readxl
-# library(readxl)
-#data = read_excel("All Raw Data Mini Trial (NW).xlsx", sheet=1)
+data = read_excel("All Raw Data Mini Trial (NW).xlsx", sheet=1)
 
 head(data) # here is what the raw data look like: 
 # Recipe Temp OLR HRT   pH Coliforms E.coli Enterococci
@@ -32,6 +31,7 @@ head(data) # here is what the raw data look like:
 # 6      2   55 0.5   6 7.45         0      0           0
 
 # read in FS FIB data (found in sheet 3 of SN's "All Raw Data Mini Trial.xlsx")
+#FSdata = read_excel("All Raw Data Mini Trial (NW).xlsx", sheet=3)
 FSdata = read.table('SN_FIB_FS.txt', header=T, sep='\t')
 
 datay = subset(data, select=-c(pH)) # not doing anything with pH variable so remove
@@ -49,7 +49,7 @@ test$Entero_FSlog = with(test, log10(Enterococci_FS))
 
 is.na(test)<-sapply(test, is.infinite) # because some numbers are zero, when logged they
                                         # will become Inf which will bring wrong numbers &
-                                        # errors later. I will re-assign these as NA
+                                        # errors later. Re-assign these as NA
 test[is.na(test)]<-0 # and now convert NAs to 0 
 
 # create new column for each FIB to calculate the 'required removal' which is the 
@@ -74,7 +74,6 @@ test$Colif_dremoval = with(test, Colif_required - Colif_achieved)
 test$Ecoli_dremoval = with(test, Ecoli_required - Ecoli_achieved)
 test$Entero_dremoval = with(test, Entero_required - Entero_achieved)
 
-
 ## choose only columns that need plotting 
 # columns with metadata (1:4) and columns with delta removal for 3 FIBs (23:25)
 
@@ -92,20 +91,18 @@ head(long) # this is what it looks like now:
 # 5      2 0.5   3   37 Colif_dremoval  2.979093
 # 6      2 0.5   6   55 Colif_dremoval -3.000000
 
-
 library(stringr)
 # make a column called 'FIB' which defines which bacteria we mean. 
-# we'l use str_extract to extract this from our 'variable' column
+# use str_extract to extract this from 'variable' column
 long$FIB = str_extract(long$variable, "Colif|Ecoli|Entero")
 # make another column called HRT_OLR which is both these variables concatenated (with
-# _ inbetween two) to make life easier when plotting subsets of data later on
+# _ in between two) to make life easier when plotting subsets of data later on
 long$HRT_OLR = paste(long$HRT,long$OLR,sep="_")
-
 
 ## ==== preparations for plotting ============
 
 #  will be facetting by recipe, and want better labels in facet box. 
-# I will define the labels i want here. 
+# define the labels i want here. 
 
 FacetLabs= c(
   '2'="Feed 1\n3:1 (FW:S)", 
@@ -196,7 +193,6 @@ deg19title = annotate_figure(deg19plots,
 ggsave("SN_minibatch_19C_dRemoval.pdf",deg19title, width=12, height=8.5, units="in")
 
 ## ==== Repeat the same for 37'C data ============
-
 
 long37 = long[grep("37",long$Temp),] # select data
 # define order
@@ -331,8 +327,9 @@ deg55title = annotate_figure(deg55plots,
 ggsave("SN_minibatch_55C_dRemoval.pdf",deg55title, width=12, height=8.5, units="in")
 
 
-## ====== end ======= 
+## ====== end of plotting ======= 
 
+## ====== setFactorOrder.R ======= 
 
 setFactorOrder <- function(x, order=sort(levels(x))) { 
   # Returns a factor ordered by `order`.  
