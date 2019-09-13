@@ -1,7 +1,7 @@
 
 # ::::::::::::::::::::: SN minibatch analysis of FIB :::::::::::::::::::::::::::::
 
-# Script used to create supplemenary figures 1, 2 and 3. 
+# Script used to create supplementary Figures 1, 2 and 3 in Nolan et al., 2019
 # dot plots of delta removal where d removal refers to the difference between required removal
 # and achieved removal. 
 # Required removal = log cfu of FIB in feedstock - 3 log (EU required FIB limit for spreading of digestate)
