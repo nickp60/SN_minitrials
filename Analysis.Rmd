@@ -44,6 +44,8 @@ sn$Recipe <- as.factor(case_when(
     sn$Recipe == "FWS12"  ~  "FWS1:S2",
     sn$Recipe == "FWS13" ~ "FWS1:S3",
     sn$Recipe == "FWS31" ~ "FWS3:S1" ))
+sn$OL <- as.factor(sn$OL)
+
 ```
 
 Note that the conditions were set to have 3 different loading rates, which we will treat as categorical because while they are numerical values of .5, 2, or 3.5, these are not observed values.  There for we set them to be factors (which allows for categories to be ranked by a inheirent value). 
@@ -51,7 +53,6 @@ Note that the conditions were set to have 3 different loading rates, which we wi
 Next, we can do some explortatory analysis:
 
 ```{r, cache=TRUE, fig.width=10, fig.height=10}
-sn$OL <- as.factor(sn$OL)
 ggscatmat(sn %>% 
             select(-FOG, -BW, -DCS, -init_Coliforms, -init_Ecoli, -init_Enterococci), color="Recipe", alpha = .3) + theme(legend.position = "bottom")
 #ggpairs(sn, aes(color=Recipe, alpha=.5))
@@ -207,14 +208,31 @@ Across all recipes and temperatures, Ammonia decreases as a function of time.
 Methane is the only thing leaving the bioreactors (as biogas), and therefore was measured daily until detructive sampling at 3, 6, or 9 days.  We have aggregated the data in the original excel sheet.  
 
 ```{r}
-ggplot(sn, aes(x=Time, y=Methane, color=as.factor(Recipe))) +
+(meth1 <- ggplot(sn, aes(x=Time, y=Methane, color=Recipe)) +
   geom_point()  + geom_smooth(method = lm) + 
-  facet_wrap(~Temp )  +
-  labs(caption=fn("Effect of Temperature and Recipe"), color="")
-ggplot(sn, aes(x=Time, y=Methane, color=as.factor(Temp))) +
+  facet_grid(~Temp )  +
+  scale_color_brewer(palette = "Set1") +
+  labs(caption=fn("Effect of Temperature and Recipe"), color=""))
+(meth2 <- ggplot(sn, aes(x=Time, y=Methane, color=Recipe)) +
+  geom_point()  + geom_smooth(method = lm) + 
+  facet_grid(Temp~OL )  +
+  scale_color_brewer(palette = "Set1") +
+  labs(caption=fn("Effect of Temperature and Recipe by OL"), color=""))
+(meth3 <- ggplot(sn %>% filter(Time!=0), aes(x=Time, y=Methane, color=as.factor(Temp))) +
+  geom_point()  + geom_smooth(method = lm) + 
+  facet_grid(Recipe~OL )  +
+  scale_color_viridis_d() +
+  labs(caption=fn("Effect of Temperature and Recipe by OL, excluding Day 0"), color=""))
+(meth4 <- ggplot(sn, aes(x=Time, y=Methane, color=as.factor(Temp))) +
   geom_point()  + geom_smooth(method = lm) + 
   facet_wrap(~Recipe )  +
-  labs(caption=fn("Effect of Recipe and Temperature"), color="")
+  labs(caption=fn("Effect of Temperature by Recipe"), color=""))
+ggsave(paste0("methane_", 1, ".png"), plot = meth1, device = "png", width = 6, height = 6)
+ggsave(paste0("methane_", 2, ".png"), plot = meth2, device = "png", width = 6, height = 6)
+ggsave(paste0("methane_", 3, ".png"), plot = meth3, device = "png", width = 6, height = 6)
+ggsave(paste0("methane_", 4, ".png"), plot = meth4, device = "png", width = 6, height = 6)
+
+
 ggplot(sn, aes(x=Time, y=Methane, color=as.factor(Temp))) +
   geom_point()  + geom_smooth(method = lm) + 
   facet_wrap(~Recipe + OL )  +
@@ -306,6 +324,8 @@ make_delta_plot <- function(
             n = n(),
             q1 = quantile(removal, 0.25),
             q3 = quantile(removal, 0.75))
+  newdf$FIB <- as.factor(newdf$FIB)
+  levels(newdf$FIB) <-   c("textstyle('Coliforms')","italic('E. coli')", "textstyle('Enterococci')")
   if (error == "sem"){
     newdf$error <- newdf$sem
   } else if (error == "sd"){
@@ -338,7 +358,7 @@ make_delta_plot <- function(
   if ("OL" %in% grps){
     thisalpha <- .8
   } else{
-    thisalpha <- 1
+    thisalpha <- .9
   }
   newdf$tempcol = case_when( 
     newdf$Temp == 19 ~ colors[1],
@@ -354,7 +374,7 @@ make_delta_plot <- function(
     id = rep(ids, each = 4),
     x = c(c(-1.5, -1.5, 1, 1), c(-1.5, -1.5, 1, 1), c(1, 1, 10, 10), c(10, 10, 1, 1))/3,
     y = c(c(-10, 0, 0, -10), c(0, 10, 10, 0), c(-10, 0, 0, -10), c(0, 10, 10, 0)),
-    alpha=c(rep(.15, 8), rep(.09, 8))
+    alpha=c(rep(.3, 8), rep(.2, 8))
   )
   # Currently we need to manually merge the two together
   datapoly <- merge(values, positions, by = c("id"))
@@ -379,7 +399,7 @@ make_delta_plot <- function(
           group=interaction(!!!syms(grps[!grps %in% c("Time", "FIB")])), 
           #color=tempcol
         ),
-        alpha=0.7, 
+        alpha=0.9, 
         width=.3,
         color="black",
         position=position_dodge(width =.5), 
@@ -391,13 +411,14 @@ make_delta_plot <- function(
           shape=thisshape,
           size=nsize,
           group=interaction(!!!syms(grps[!grps %in% c("Time", "FIB")])), fill=tempcol, 
+          color=tempcol
         ),
         alpha=thisalpha, 
         #size=2,
-        color="black",
+#        color="black",
         position=position_dodge(width =.5), 
       ) + 
-      facet_grid(Recipe ~ FIB, scales="free_y") + 
+      facet_grid(Recipe ~ FIB, scales="free_y", labeller=label_parsed) + 
       # scale_x_reverse(breaks=c(0,3,6,9)) + 
       scale_x_reverse(breaks=times/3, labels=as.character(times)) + 
       scale_y_continuous(breaks=c( -2, 0, 2, 4)) + 
@@ -416,20 +437,44 @@ make_delta_plot <- function(
                            labels = unique(newdf$Temp), 
                            breaks = unique(newdf$tempcol),
                            guide = "legend") +
-    guides(color = guide_legend(override.aes = list(size = 2)),
-           shape = shape_guide,
-           size = size_guide) +
+      # scale_fill_identity("", 
+      #                      labels = unique(newdf$Temp), 
+      #                      breaks = unique(newdf$tempcol),
+      #                      guide = "legend") +
+    guides(
+#      fill = guide_legend(override.aes = list(size = 0.00011)),
+      color = guide_legend(override.aes = list(size = 3)),
+      shape = shape_guide,
+      size = size_guide) +
       labs(x="Days", y=expression(Delta~Log(CFU)),  color="Temp", shape="", 
-           title="Meeting EU pathogen removal regulations", subtitle="EU regultations require FIB counts to be less than 3000 CFUs.\nGreen/red zones indicates sufficient/insufficient pathogen removal respectively",
+           title="Meeting EU pathogen removal regulations", subtitle="EU regultations require FIB counts to be less than 3000 CFUs.\nNegative values indicates sufficient FIB removal.",
            caption=paste("Groups:", paste(grps, collapse= ", "), "\nOLs:", paste(OLs, collapse= ", "), "\nn>=4")) +
       #coord_cartesian() +
+
+      # why this?  Well, to get a pretty color label (not a fill label) and the black outlines, you need to have t
+      #  this AFTER the legend is defined
+      geom_point(
+        data=newdf,
+        aes(
+          x=Time/3, y=meen,
+          shape=thisshape,
+          size=nsize,
+          group=interaction(!!!syms(grps[!grps %in% c("Time", "FIB")]))
+        ),
+        fill=NA,
+        alpha=thisalpha,
+        #size=2,
+        color="black",
+        position=position_dodge(width =.5),
+      ) +
       coord_flip(xlim=c(min(times/3) -.5, max(times/3) +.5), 
-                 ylim=c(min(newdf$meen) -.5, max(newdf$meen) + .5)) 
+                 ylim=c(min(newdf$meen) -.5, max(newdf$meen) + .5))     
   )
   return(p)
 }
 (p1 <- make_delta_plot(sntall, grps=c("FIB","Time", "Recipe", "Temp"), times=c(3, 6, 9), OLs=c(.5, 2, 3.5), shapes=T, size=F, error="sem"))
 
-ggsave(p1, filename = "./removalplot.png", device = "png", width = 7, height = 6)
+ggsave(p1 + labs(title=NULL, caption=NULL, subtitle=NULL), filename = "./removalplot.png", device = "png", width = 6, height = 5)
+ggsave(p1 + labs(title=NULL, caption=NULL, subtitle=NULL), filename = "./removalplot.pdf", device = "pdf", width = 7, height = 6)
 ```
 
